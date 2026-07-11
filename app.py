@@ -4,21 +4,40 @@ from datetime import datetime
 
 def main(page: ft.Page):
     page.title = "Sistema Universal - Venta Mixta"
-    page.scroll = "adaptive"
     page.bgcolor = "#F0F4F8"
+    page.scroll = None 
 
     ARCHIVO_VENTAS = "ventas_diarias.txt"
 
     header = ft.Container(
-        content=ft.Row(
+        content=ft.Column(
             controls=[
-                ft.Text("NOMBRE DE TU TIENDA", size=26, weight="bold", color="white", text_align=ft.TextAlign.CENTER, overflow=ft.TextOverflow.CLIP)
+                ft.Text(
+                    "NOMBRE DE TU TIENDA", 
+                    size=24, 
+                    weight="bold", 
+                    color="white", 
+                    text_align=ft.TextAlign.CENTER,
+                    overflow=ft.TextOverflow.VISIBLE
+                )
             ],
             alignment=ft.MainAxisAlignment.CENTER,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
         ),
         bgcolor="#1976D2",
-        padding=20,
+        padding=15,
         border_radius=10,
+    )
+
+    # Ajuste: Se fuerza a que el Row ocupe el ancho total (expand=True)
+    btn_nav_prod = ft.ElevatedButton("PRODUCTOS", bgcolor="yellow", color="black", style=ft.ButtonStyle(padding=5))
+    btn_nav_cobro = ft.ElevatedButton("COBRO", bgcolor="green", color="white", style=ft.ButtonStyle(padding=5))
+    btn_nav_resumen = ft.ElevatedButton("RESUMEN", bgcolor="green", color="white", style=ft.ButtonStyle(padding=5))
+
+    nav_bar = ft.Row(
+        [btn_nav_prod, btn_nav_cobro, btn_nav_resumen], 
+        alignment=ft.MainAxisAlignment.CENTER, # Centrado absoluto
+        spacing=10 # Espaciado fijo para evitar amontonamiento
     )
 
     catalogo_raw = [
@@ -41,9 +60,10 @@ def main(page: ft.Page):
                sorted([p for p in catalogo_raw if p['tipo'] == 'pieza'], key=lambda x: x['nombre'])
     
     carrito = []
-    p_productos = ft.Container(content=ft.Column(), bgcolor="#E3F2FD", padding=10, border_radius=10, visible=True)
-    p_cobro = ft.Container(content=ft.Column(), bgcolor="#FFF3E0", padding=10, border_radius=10, visible=False)
-    p_resumen = ft.Container(content=ft.Column(), bgcolor="#E8F5E9", padding=10, border_radius=10, visible=False)
+    
+    p_productos = ft.Container(content=ft.Column(scroll=ft.ScrollMode.AUTO), bgcolor="#E3F2FD", padding=10, border_radius=10, visible=True, expand=True)
+    p_cobro = ft.Container(content=ft.Column(scroll=ft.ScrollMode.AUTO), bgcolor="#FFF3E0", padding=10, border_radius=10, visible=False, expand=True)
+    p_resumen = ft.Container(content=ft.Column(scroll=ft.ScrollMode.AUTO), bgcolor="#E8F5E9", padding=10, border_radius=10, visible=False, expand=True)
 
     lista_desglose = ft.Column()
     total_text = ft.Text("Total a pagar: $0.00", size=20, weight="bold")
@@ -52,10 +72,6 @@ def main(page: ft.Page):
     campo_pago = ft.TextField(label="Pago del cliente ($)", keyboard_type="number", border_color="#CCFF00", border_width=3)
     campo_otros = ft.TextField(label="Precio Libre ($)", keyboard_type="number", border_color="#CCFF00", border_width=3)
     campo_cantidad = ft.TextField(label="Cantidad (Piezas)", value="", keyboard_type="number")
-
-    btn_nav_prod = ft.ElevatedButton("PRODUCTOS", bgcolor="yellow", color="black")
-    btn_nav_cobro = ft.ElevatedButton("COBRO", bgcolor="green", color="white")
-    btn_nav_resumen = ft.ElevatedButton("RESUMEN", bgcolor="green", color="white")
 
     def cambiar_pantalla(destino):
         p_productos.visible = (destino == "productos")
@@ -74,15 +90,13 @@ def main(page: ft.Page):
 
     def agregar_item(nombre, precio, medida):
         if precio <= 0:
-            page.snack_bar = ft.SnackBar(ft.Text("Error: Debes ingresar una cantidad o precio válido mayor a 0"))
+            page.snack_bar = ft.SnackBar(ft.Text("Error: El precio o cantidad debe ser mayor a 0"))
             page.snack_bar.open = True
             page.update()
             return
         carrito.append({"detalle": f"{nombre} ({medida}) - ${precio:.2f}", "precio": precio})
-        campo_otros.value = ""
-        campo_cantidad.value = ""
-        actualizar_lista_visual()
-        calcular_total_y_cambio()
+        campo_otros.value = ""; campo_cantidad.value = ""
+        actualizar_lista_visual(); calcular_total_y_cambio()
 
     def calcular_total_y_cambio():
         total = sum(i["precio"] for i in carrito)
@@ -96,9 +110,7 @@ def main(page: ft.Page):
         page.update()
 
     def eliminar_item(item_a_eliminar):
-        carrito.remove(item_a_eliminar)
-        actualizar_lista_visual()
-        calcular_total_y_cambio()
+        carrito.remove(item_a_eliminar); actualizar_lista_visual(); calcular_total_y_cambio()
 
     def actualizar_lista_visual():
         lista_desglose.controls.clear()
@@ -115,7 +127,9 @@ def main(page: ft.Page):
             with open(ARCHIVO_VENTAS, "a", encoding="utf-8") as f:
                 f.write(f"\n--- VENTA #{num_venta} | {ts} | TOTAL: ${total:.2f} ---\n")
                 for item in carrito: f.write(f"{item['detalle']}\n")
-            carrito.clear(); lista_desglose.controls.clear(); total_text.value = "Total: $0.00"; campo_pago.value = ""; campo_otros.value = ""; campo_cantidad.value = ""; page.update()
+            carrito.clear(); lista_desglose.controls.clear(); total_text.value = "Total a pagar: $0.00"
+            campo_pago.value = ""; campo_otros.value = ""; campo_cantidad.value = ""
+            cambio_text.value = "Cambio a entregar: $0.00"; cambio_text.color = "blue"; page.update()
 
     def hacer_corte(e):
         if os.path.exists(ARCHIVO_VENTAS): os.remove(ARCHIVO_VENTAS)
@@ -131,8 +145,7 @@ def main(page: ft.Page):
                     p_resumen.content.controls.append(ft.Text(linea.strip()))
                     if "--- VENTA #" in linea:
                         conteo_ventas += 1
-                        try:
-                            acumulado += float(linea.split('TOTAL: $')[-1].split(' ---')[0])
+                        try: acumulado += float(linea.split('TOTAL: $')[-1].split(' ---')[0])
                         except: pass
         p_resumen.content.controls.extend([ft.Divider(), ft.Text(f"TOTAL VENTAS: {conteo_ventas}", size=18), ft.Text(f"DINERO TOTAL: ${acumulado:.2f}", size=22, weight="bold", color="green"), ft.ElevatedButton("CORTE DE CAJA", bgcolor="red", color="white", on_click=hacer_corte)])
         page.update()
@@ -140,7 +153,6 @@ def main(page: ft.Page):
     btn_nav_prod.on_click = lambda e: cambiar_pantalla("productos")
     btn_nav_cobro.on_click = lambda e: cambiar_pantalla("cobro")
     btn_nav_resumen.on_click = lambda e: cambiar_pantalla("resumen")
-    nav_bar = ft.Row([btn_nav_prod, btn_nav_cobro, btn_nav_resumen], alignment=ft.MainAxisAlignment.CENTER)
 
     for i, p in enumerate(catalogo):
         if i > 0 and p['tipo'] == 'pieza' and catalogo[i-1]['tipo'] == 'liquido':
@@ -164,7 +176,9 @@ def main(page: ft.Page):
         p_productos.content.controls.append(ft.ElevatedButton(f"{p['nombre']} - ${p['precio']}", on_click=accion, bgcolor="orange", color="black"))
 
     campo_pago.on_change = lambda e: calcular_total_y_cambio()
-    page.add(header, nav_bar, ft.Divider(), p_productos, p_cobro, p_resumen)
+    
+    # Estructura final con centrado en el nav_bar
+    page.add(ft.Column([header, nav_bar, ft.Divider(), ft.Stack([p_productos, p_cobro, p_resumen], expand=True)], expand=True))
     cambiar_pantalla("productos")
 
 ft.app(target=main)
